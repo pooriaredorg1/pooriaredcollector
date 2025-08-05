@@ -26,25 +26,20 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      # مرحله ۴: دانلود و آماده‌سازی Xray-core (روش نهایی و قطعی)
+      # مرحله ۴: دانلود و آماده‌سازی Xray-core
       - name: Download and Setup Xray-core
         run: |
           echo "Finding the precise Xray-core release URL..."
-          # روش نهایی: انتخاب دقیق فایل zip و نادیده گرفتن فایل‌های دیگر (.dgst)
           LATEST_URL=$(curl -s "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | jq -r '.assets[] | select(.name | endswith("linux-64.zip")) | .browser_download_url')
-          
           if [ -z "$LATEST_URL" ]; then
-            echo "::error::Could not find the download URL. The API response might have changed."
+            echo "::error::Could not find the download URL."
             exit 1
           fi
-
           echo "Downloading from precise URL: $LATEST_URL"
           curl -sL -o xray.zip "$LATEST_URL"
-          
           echo "Unzipping Xray..."
           unzip -q xray.zip xray
           chmod +x xray
-          
           echo "Xray is ready!"
           ./xray --version
 
@@ -52,15 +47,22 @@ jobs:
       - name: Run The Collector Script
         run: python collector.py
 
-      # مرحله ۶: کامیت و پوش کردن فایل‌های خروجی به مخزن
+      # مرحله ۶: کامیت و پوش کردن نتایج (فقط در صورت وجود فایل)
       - name: Commit and Push Results
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action Bot"
-          git add sub.txt sub_base64.txt
-          if ! git diff-index --quiet HEAD; then
-            git commit -m "✅ Configs updated at $(date -u)"
-            git push
+          # ابتدا چک کن که آیا فایلی برای کامیت کردن وجود دارد یا نه
+          if [ -f "sub.txt" ]; then
+            echo "New configs found. Committing files..."
+            git config --local user.email "action@github.com"
+            git config --local user.name "GitHub Action Bot"
+            git add sub.txt sub_base64.txt
+            # فقط در صورتی کامیت کن که تغییری وجود داشته باشد
+            if ! git diff-index --quiet HEAD; then
+              git commit -m "✅ Configs updated at $(date -u)"
+              git push
+            else
+              echo "No changes to commit."
+            fi
           else
-            echo "No changes to commit."
+            echo "No working configs found in this run. Nothing to commit."
           fi
