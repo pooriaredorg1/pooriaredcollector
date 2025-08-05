@@ -26,12 +26,19 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      # مرحله ۴: دانلود و آماده‌سازی آخرین نسخه Xray-core
+      # مرحله ۴: دانلود و آماده‌سازی آخرین نسخه Xray-core (نسخه اصلاح شده و پایدار)
       - name: Download and Setup Xray-core
         run: |
-          echo "Downloading latest Xray-core..."
-          # دریافت آخرین نسخه از گیت‌هاب
-          LATEST_URL=$(curl -s "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | grep "browser_download_url.*linux-64.zip" | cut -d '"' -f 4)
+          echo "Downloading latest Xray-core using a robust method..."
+          # استفاده از jq برای پارس کردن دقیق JSON و استخراج لینک دانلود
+          LATEST_URL=$(curl -s "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | jq -r '.assets[] | select(.name | contains("linux-64.zip")) | .browser_download_url')
+          
+          if [ -z "$LATEST_URL" ]; then
+            echo "::error::Could not find download URL for Xray-core."
+            exit 1
+          fi
+
+          echo "Download URL found: $LATEST_URL"
           wget -q -O xray.zip "$LATEST_URL"
           
           echo "Unzipping Xray..."
