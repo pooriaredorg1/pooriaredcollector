@@ -1,0 +1,60 @@
+name: Ultimate V2Ray Collector
+
+on:
+  schedule:
+    # اجرا در دقیقه 0 هر 2 ساعت یک‌بار
+    - cron: '0 */2 * * *'
+  workflow_dispatch: # اجازه اجرای دستی
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # مرحله ۱: دریافت کد از مخزن
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # مرحله ۲: نصب پایتون
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip' # کش کردن پکیج‌های پایتون برای سرعت بیشتر
+
+      # مرحله ۳: نصب نیازمندی‌های پایتون
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt
+
+      # مرحله ۴: دانلود و آماده‌سازی آخرین نسخه Xray-core
+      - name: Download and Setup Xray-core
+        run: |
+          echo "Downloading latest Xray-core..."
+          # دریافت آخرین نسخه از گیت‌هاب
+          LATEST_URL=$(curl -s "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | grep "browser_download_url.*linux-64.zip" | cut -d '"' -f 4)
+          wget -q -O xray.zip "$LATEST_URL"
+          
+          echo "Unzipping Xray..."
+          unzip -q xray.zip xray
+          chmod +x xray
+          
+          echo "Xray is ready!"
+          ./xray --version
+
+      # مرحله ۵: اجرای اسکریپت اصلی جمع‌آوری کانفیگ
+      - name: Run The Collector Script
+        run: python collector.py
+
+      # مرحله ۶: کامیت و پوش کردن فایل‌های خروجی به مخزن
+      - name: Commit and Push Results
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Bot"
+          git add sub.txt sub_base64.txt
+          # فقط در صورتی کامیت کن که تغییری وجود داشته باشد
+          if ! git diff-index --quiet HEAD; then
+            git commit -m "✅ Configs updated at $(date -u)"
+            git push
+          else
+            echo "No changes to commit."
+          fi
