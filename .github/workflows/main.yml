@@ -1,10 +1,14 @@
 name: Ultimate V2Ray Collector
 
+# این بخش جدید، دسترسی نوشتن را به اکشن می‌دهد
+permissions:
+  contents: write
+
 on:
   schedule:
     # اجرا در دقیقه 0 هر 2 ساعت یک‌بار
     - cron: '0 */2 * * *'
-  workflow_dispatch: # اجازه اجرای دستی
+  workflow_dispatch:
 
 jobs:
   build:
@@ -47,16 +51,14 @@ jobs:
       - name: Run The Collector Script
         run: python collector.py
 
-      # مرحله ۶: کامیت و پوش کردن نتایج (فقط در صورت وجود فایل)
+      # مرحله ۶: کامیت و پوش کردن نتایج
       - name: Commit and Push Results
         run: |
-          # ابتدا چک کن که آیا فایلی برای کامیت کردن وجود دارد یا نه
           if [ -f "sub.txt" ]; then
             echo "New configs found. Committing files..."
             git config --local user.email "action@github.com"
             git config --local user.name "GitHub Action Bot"
             git add sub.txt sub_base64.txt
-            # فقط در صورتی کامیت کن که تغییری وجود داشته باشد
             if ! git diff-index --quiet HEAD; then
               git commit -m "✅ Configs updated at $(date -u)"
               git push
