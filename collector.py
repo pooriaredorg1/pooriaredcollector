@@ -17,8 +17,8 @@ SUBSCRIPTION_URLS = [
 ]
 # آدرس برای تست اتصال و پینگ
 PING_TEST_URL = "http://www.gstatic.com/generate_204"
-# حداکثر زمان انتظار برای هر تست (ثانیه)
-REQUEST_TIMEOUT = 4
+# حداکثر زمان انتظار برای هر تست (ثانیه) - افزایش یافته برای کانفیگ‌های کندتر
+REQUEST_TIMEOUT = 10
 # تعداد کارگرها (Threads) برای تست همزمان کانفیگ‌ها
 MAX_WORKERS = 100
 # نام پیشوند برای تگ‌گذاری کانفیگ‌های نهایی
@@ -121,7 +121,7 @@ def generate_xray_config(proxy_config, local_port):
                 "streamSettings": {
                     "network": params.get("type", ["tcp"])[0],
                     "security": params.get("security", ["none"])[0],
-                    "tlsSettings": {"serverName": params.get("sni", [parsed_url.hostname])[0]} if params.get("security") == "tls" else None,
+                    "tlsSettings": {"serverName": params.get("sni", [parsed_url.hostname])[0]} if params.get("security") == ["tls"] else None,
                     "wsSettings": {"path": params.get("path", ["/"])[0]} if params.get("type") == ["ws"] else None,
                 }
             }
@@ -264,4 +264,3 @@ if __name__ == "__main__":
         print("   در GitHub Action این کار به صورت خودکار انجام می‌شود.")
     else:
         main()
-
