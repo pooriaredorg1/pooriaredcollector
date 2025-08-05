@@ -26,19 +26,19 @@ jobs:
       - name: Install Python dependencies
         run: pip install -r requirements.txt
 
-      # مرحله ۴: دانلود و آماده‌سازی Xray-core (با استفاده از curl)
+      # مرحله ۴: دانلود و آماده‌سازی Xray-core (روش نهایی و قطعی)
       - name: Download and Setup Xray-core
         run: |
-          echo "Finding latest Xray-core release URL..."
-          LATEST_URL=$(curl -s "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | jq -r '.assets[] | select(.name | contains("linux-64.zip")) | .browser_download_url')
+          echo "Finding the precise Xray-core release URL..."
+          # روش نهایی: انتخاب دقیق فایل zip و نادیده گرفتن فایل‌های دیگر (.dgst)
+          LATEST_URL=$(curl -s "https://api.github.com/repos/XTLS/Xray-core/releases/latest" | jq -r '.assets[] | select(.name | endswith("linux-64.zip")) | .browser_download_url')
           
           if [ -z "$LATEST_URL" ]; then
-            echo "::error::Could not find download URL for Xray-core."
+            echo "::error::Could not find the download URL. The API response might have changed."
             exit 1
           fi
 
-          echo "Downloading from URL: $LATEST_URL"
-          # استفاده از curl به جای wget برای دانلود مطمئن‌تر
+          echo "Downloading from precise URL: $LATEST_URL"
           curl -sL -o xray.zip "$LATEST_URL"
           
           echo "Unzipping Xray..."
