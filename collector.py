@@ -10,24 +10,31 @@ from urllib.parse import urlparse, unquote, quote, parse_qs, urlunparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # --- تنظیمات اصلی ---
+# ۱. لیست لینک‌های اشتراک به دو لینک درخواستی شما محدود شد
 SUBSCRIPTION_URLS = [
     "https://raw.githubusercontent.com/pooriaredorg1/pooria/refs/heads/main/configs/proxy_configs.txt#POORIA-mixpro%20pooriaredorg1",
     "https://raw.githubusercontent.com/V2RAYCONFIGSPOOL/V2RAY_SUB/refs/heads/main/v2ray_configs.txt"
 ]
 PING_TEST_URL = "http://www.gstatic.com/generate_204"
-REQUEST_TIMEOUT = 10
-MAX_WORKERS = 100
+# ۲. زمان تایم‌اوت افزایش یافت
+REQUEST_TIMEOUT = 15
+# ۳. محدودیت کانفیگ نهایی افزایش یافت
+MAX_FINAL_CONFIGS = 200
+# تعداد کارگرها برای تست سریع‌تر
+MAX_WORKERS = 250
 TAG_PREFIX = "POORIA"
 BASE_SOCKS_PORT = 10800
 
+# --- متغیرهای گلوبال ---
 ip_location_cache = {}
 
 def get_geolocation(ip_address):
+    """کشور مربوط به IP را با استفاده از API و کش دریافت می‌کند."""
     if ip_address in ip_location_cache:
         return ip_location_cache[ip_address]
     try:
         headers = {'User-Agent': 'Mozilla/5.0'}
-        response = requests.get(f"http://ip-api.com/json/{ip_address}?fields=countryCode", timeout=REQUEST_TIMEOUT, headers=headers)
+        response = requests.get(f"http://ip-api.com/json/{ip_address}?fields=countryCode", timeout=10, headers=headers)
         if response.status_code == 200:
             country_code = response.json().get("countryCode", "N/A")
             ip_location_cache[ip_address] = country_code
@@ -37,6 +44,7 @@ def get_geolocation(ip_address):
     return "N/A"
 
 def decode_base64_content(content):
+    """محتوای Base64 را با مدیریت خطا دیکود می‌کند."""
     try:
         padding = '=' * (4 - len(content) % 4)
         return base64.b64decode(content + padding).decode('utf-8')
@@ -44,8 +52,9 @@ def decode_base64_content(content):
         return None
 
 def fetch_subscription_content(url):
+    """محتوای لینک اشتراک را دانلود و دیکود می‌کند."""
     try:
-        response = requests.get(url, timeout=10)
+        response = requests.get(url, timeout=15)
         response.raise_for_status()
         content = response.text
         decoded_content = decode_base64_content(content)
@@ -55,6 +64,7 @@ def fetch_subscription_content(url):
         return []
 
 def generate_xray_config(proxy_config, local_port):
+    """یک فایل کانفیگ موقت برای Xray بر اساس نوع پروتکل ایجاد می‌کند."""
     try:
         protocol = proxy_config.split("://")[0]
         xray_config = {
@@ -82,21 +92,17 @@ def generate_xray_config(proxy_config, local_port):
             xray_config["outbounds"].append(outbound)
         else: return None
         return xray_config
-    except Exception as e:
-        # === PRINT DEBUG INFO ===
-        print(f"🔴 FAILED TO PARSE CONFIG: {proxy_config[:40]}... | Error: {e}")
+    except Exception:
         return None
 
 def test_config_with_xray(config, worker_id):
+    """یک کانفیگ را با استفاده از یک نمونه Xray واقعی تست می‌کند."""
     local_port = BASE_SOCKS_PORT + worker_id
     config_file_path = f"temp_config_{worker_id}.json"
     xray_proc = None
-    # === PRINT DEBUG INFO ===
-    print(f"  Testing config: {config[:50]}...")
     try:
         xray_json_config = generate_xray_config(config, local_port)
         if not xray_json_config:
-            # پیام خطا قبلاً در generate_xray_config چاپ شده
             return None
         with open(config_file_path, 'w') as f:
             json.dump(xray_json_config, f)
@@ -111,13 +117,7 @@ def test_config_with_xray(config, worker_id):
             location = get_geolocation(server_ip)
             print(f"✅ SUCCESS: {config[:30]}... | Ping: {latency}ms | Location: {location}")
             return {"config": config, "latency": latency, "location": location}
-        else:
-            # === PRINT DEBUG INFO ===
-            print(f"  ❌ FAILED (Bad Status): {config[:40]}... | Status: {response.status_code}")
-            return None
-    except Exception as e:
-        # === PRINT DEBUG INFO ===
-        print(f"  ❌ FAILED (Exception): {config[:40]}... | Error: {e}")
+    except Exception:
         return None
     finally:
         if xray_proc:
@@ -126,6 +126,7 @@ def test_config_with_xray(config, worker_id):
             os.remove(config_file_path)
 
 def rename_config(config, new_name):
+    """نام (fragment/#) کانفیگ را با نام جدید جایگزین می‌کند."""
     try:
         if config.startswith("vmess://"):
             decoded_str = decode_base64_content(config.replace("vmess://", ""))
@@ -141,7 +142,7 @@ def rename_config(config, new_name):
         return f"{config.split('#')[0]}#{quote(new_name)}"
 
 def main():
-    print("🚀 Starting collector in VERBOSE DEBUG MODE...")
+    print("🚀 Starting collector...")
     all_configs = set()
     for url in SUBSCRIPTION_URLS:
         configs = fetch_subscription_content(url)
@@ -158,13 +159,19 @@ def main():
             result = future.result()
             if result:
                 working_configs.append(result)
-    
+
     print(f"\n🏁 Test finished. Found {len(working_configs)} working configs.")
     if not working_configs:
         print("No working configs found. Exiting without creating files.")
         return
 
     working_configs.sort(key=lambda x: x['latency'])
+    
+    # محدود کردن تعداد کانفیگ‌های نهایی به مقدار جدید
+    if len(working_configs) > MAX_FINAL_CONFIGS:
+        print(f"Limiting final configs to the top {MAX_FINAL_CONFIGS}.")
+        working_configs = working_configs[:MAX_FINAL_CONFIGS]
+
     final_configs_list = []
     for i, item in enumerate(working_configs):
         new_name = f"{TAG_PREFIX}{i+1} | {item['location']} | {item['latency']}ms"
